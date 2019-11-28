@@ -153,7 +153,7 @@ export interface IDateAxisProperties extends IValueAxisProperties {
 	 *
 	 * @default true
 	 */
-	snapTooltip?: boolean;
+	snapTooltip?: boolean ;
 
 	/**
 	 * A special date format to apply axis tooltips.
@@ -401,6 +401,26 @@ export class DateAxis<T extends AxisRenderer = AxisRenderer> extends ValueAxis<T
 	 * This can be disabled by setting `markUnitChange = false`.
 	 */
 	public periodChangeDateFormats: Dictionary<TimeUnit, string | Intl.DateTimeFormatOptions> = new Dictionary<TimeUnit, string | Intl.DateTimeFormatOptions>();
+
+	/**
+	 * When detecting a period change, these units will be skipped in favor of a larger unit.
+	 *
+	 * This allows us to format the next higher unit while zooming, like zooming into:
+	 *
+	 * `22:00 - 23:00 - [b]Jan 1[b] - 01:00 - ...`
+	 *
+	 * Instead of:
+	 *
+	 * `23:00 - 23:30 - [b]00:00[b] - 00:30`
+	 *
+	 * We can have:
+	 *
+	 * `23:00 - 23:30 - [b]Jan 1[b] - 00:30`
+	 *
+	 * This gets overriden by setting `markUnitChange = false`.
+	 */
+
+	public skipPeriodChanges: List<TimeUnit> = new List<TimeUnit>();
 
 	/**
 	 * At which intervals grid elements are displayed.
@@ -1260,6 +1280,11 @@ export class DateAxis<T extends AxisRenderer = AxisRenderer> extends ValueAxis<T
 			let timeUnit = this._gridInterval.timeUnit;
 			let intervalCount = this._gridInterval.count;
 			let prevGridDate = $time.copy(this._gridDate);
+			let timeUnitAfterSkipping = timeUnit;
+			while (this.skipPeriodChanges.contains(timeUnitAfterSkipping)) {
+				timeUnitAfterSkipping = $time.getNextUnit(timeUnitAfterSkipping);
+			}
+			let nextGridUnit = $time.getNextUnit(timeUnitAfterSkipping);
 
 			let dataItemsIterator = this._dataItemsIterator;
 			this.resetIterators();
@@ -1274,9 +1299,9 @@ export class DateAxis<T extends AxisRenderer = AxisRenderer> extends ValueAxis<T
 				let format = this.dateFormats.getKey(timeUnit);
 
 				if (this.markUnitChange && prevGridDate) {
-					if ($time.checkChange(date, prevGridDate, this._nextGridUnit, this._df.utc)) {
-						if (timeUnit !== "year") {
-							format = this.periodChangeDateFormats.getKey(timeUnit);
+					if ($time.checkChange(date, prevGridDate, nextGridUnit, this._df.utc)) {
+						if (timeUnitAfterSkipping !== "year") {
+							format = this.periodChangeDateFormats.getKey(timeUnitAfterSkipping);
 						}
 					}
 				}
@@ -1308,6 +1333,11 @@ export class DateAxis<T extends AxisRenderer = AxisRenderer> extends ValueAxis<T
 					if (axisBreak.breakSize > 0) {
 						let timeUnit: TimeUnit = axisBreak.gridInterval.timeUnit;
 						let intervalCount: number = axisBreak.gridInterval.count;
+						let timeUnitAfterSkipping: TimeUnit = timeUnit;
+						while (this.skipPeriodChanges.contains(timeUnitAfterSkipping)) {
+							timeUnitAfterSkipping = $time.getNextUnit(timeUnitAfterSkipping);
+						}
+						let nextGridUnit: TimeUnit = $time.getNextUnit(timeUnitAfterSkipping);
 
 						// only add grid if gap is bigger then minGridDistance
 						if ($math.getDistance(axisBreak.startPoint, axisBreak.endPoint) > renderer.minGridDistance * 4) {
@@ -1326,9 +1356,9 @@ export class DateAxis<T extends AxisRenderer = AxisRenderer> extends ValueAxis<T
 									let format = this.dateFormats.getKey(timeUnit);
 
 									if (this.markUnitChange && prevGridDate) {
-										if ($time.checkChange(date, prevGridDate, this._nextGridUnit, this._df.utc)) {
-											if (timeUnit !== "year") {
-												format = this.periodChangeDateFormats.getKey(timeUnit);
+										if ($time.checkChange(date, prevGridDate, nextGridUnit, this._df.utc)) {
+											if (timeUnitAfterSkipping !== "year") {
+												format = this.periodChangeDateFormats.getKey(timeUnitAfterSkipping);
 											}
 										}
 									}
